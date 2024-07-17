@@ -18,12 +18,8 @@ opt = parse(path_opt)
 
 #define some auxiliary functions
 pil_to_tensor = transforms.ToTensor()
-    
-# define some parameters based on the run we want to make
-#selected network
-network = opt['network']['name']
 
-PATH_MODEL = opt['save']['path']
+# PATH_MODEL = opt['save']['best']
 
 model = Network(img_channel=opt['network']['img_channels'], 
                     width=opt['network']['width'], 
