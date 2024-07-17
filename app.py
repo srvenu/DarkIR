@@ -55,18 +55,20 @@ def process_img(image):
     restored_img = (restored_img * 255.0).round().astype(np.uint8)  # float32 to uint8
     return Image.fromarray(restored_img) #(image, Image.fromarray(restored_img))
 
-title = "Low-Light-Deblurring ✏️🖼️ 🤗"
+title = "Low-Light-Deblurring 🌚🌠🌝"
 description = ''' ## [Low Light Image deblurring enhancement](https://github.com/cidautai/Net-Low-light-Deblurring)
 
 [Daniel Feijoo](https://github.com/danifei)
 
 Fundación Cidaut
 
+This model enhances low light images into normal light conditions ones. It was trained using LOLv2-real, LOLv2-synth and LOLBlur. 
+Due to the training on LOLBlur, this network is expected to also reconstruct blurred low light images. 
 
 > **Disclaimer:** please remember this is not a product, thus, you will notice some limitations.
 **This demo expects an image with some degradations.**
-Due to the GPU memory limitations, the app might crash if you feed a high-resolution image (2K, 4K). <br>
-The model was trained using mostly synthetic data, thus it might not work great on real-world complex images. 
+Due to the CPU limitations, the model won't return results inmediately <br>.
+Except for the LOLv2-real, the model was trained using mostly synthetic data, thus it might not work great on real-world complex images. 
 
 <br>
 '''
