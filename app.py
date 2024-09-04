@@ -23,7 +23,8 @@ pil_to_tensor = transforms.ToTensor()
 
 model = Network(img_channel=opt['network']['img_channels'], 
                     width=opt['network']['width'], 
-                    middle_blk_num=opt['network']['middle_blk_num'], 
+                    middle_blk_num_enc=opt['network']['middle_blk_num_enc'],
+                    middle_blk_num_dec=opt['network']['middle_blk_num_dec'],
                     enc_blk_nums=opt['network']['enc_blk_nums'],
                     dec_blk_nums=opt['network']['dec_blk_nums'], 
                     dilations=opt['network']['dilations'],
