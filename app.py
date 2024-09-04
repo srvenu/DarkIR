@@ -29,7 +29,7 @@ model = Network(img_channel=opt['network']['img_channels'],
                     dilations=opt['network']['dilations'],
                     extra_depth_wise = opt['network']['extra_depth_wise'])
 
-checkpoints = torch.load(opt['save']['best'], map_location=device)
+checkpoints = torch.load('Network_noFAC_LOLBlur.pt', map_location=device)
 # print(checkpoints)
 model.load_state_dict(checkpoints['model_state_dict'])
 
