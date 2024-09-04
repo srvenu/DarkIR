@@ -14,25 +14,6 @@ except:
 https://github.com/wangchx67/FourLLIE.git
 '''
 
-def initialize_weights(net_l, scale=1):
-    if not isinstance(net_l, list):
-        net_l = [net_l]
-    for net in net_l:
-        for m in net.modules():
-            if isinstance(m, nn.Conv2d):
-                init.kaiming_normal_(m.weight, a=0, mode='fan_in')
-                m.weight.data *= scale  # for residual block
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.Linear):
-                init.kaiming_normal_(m.weight, a=0, mode='fan_in')
-                m.weight.data *= scale
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias.data, 0.0)
-
 class FreNAFBlock(nn.Module):
     
     def __init__(self, nc, expand = 2):
@@ -135,7 +116,7 @@ if __name__ == '__main__':
     
     # net = NAFNet(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
     #                   enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
-    net  = EBlock(c = img_channel, 
+    net  = EBlock_freq(c = img_channel, 
                             dilations = dilations,
                             extra_depth_wise=extra_depth_wise)
 
