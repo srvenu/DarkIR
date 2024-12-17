@@ -15,7 +15,7 @@ tensor_to_pil = transforms.ToPILImage()
 
 network = 'DarkIR'
 
-PATH_MODEL = './models/darkir_v2real+lsrw.pt'
+PATH_MODEL = './darkir_v2real+lsrw.pt'
 
 model = DarkIR(img_channel=3, 
                     width=32, 
