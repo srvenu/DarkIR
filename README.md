@@ -1,3 +1,4 @@
+---
 title: DarkIR
 emoji: 🌻
 colorFrom: red
@@ -7,3 +8,4 @@ sdk_version: 5.8.0
 app_file: app.py
 pinned: false
 license: mit
+---
