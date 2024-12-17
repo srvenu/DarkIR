@@ -1,84 +1,89 @@
 import gradio as gr 
 from PIL import Image
-import os
 import torch
-import torch.nn.functional as F
 import torchvision.transforms as transforms
-import torchvision
-import numpy as np
-import yaml
-from huggingface_hub import hf_hub_download
+import torch.nn.functional as F
 
-from archs import Network
-from options.options import parse
+from archs import DarkIR
 
-path_opt = './options/predict/LOLBlur.yml'
 
-opt = parse(path_opt)
+
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 #define some auxiliary functions
 pil_to_tensor = transforms.ToTensor()
+tensor_to_pil = transforms.ToPILImage()
 
-# PATH_MODEL = opt['save']['best']
+network = 'DarkIR'
 
-model = Network(img_channel=opt['network']['img_channels'], 
-                    width=opt['network']['width'], 
-                    middle_blk_num_enc=opt['network']['middle_blk_num_enc'],
-                    middle_blk_num_dec=opt['network']['middle_blk_num_dec'],
-                    enc_blk_nums=opt['network']['enc_blk_nums'],
-                    dec_blk_nums=opt['network']['dec_blk_nums'], 
-                    dilations=opt['network']['dilations'],
-                    extra_depth_wise = opt['network']['extra_depth_wise'])
+PATH_MODEL = './models/darkir_1k_allv2_251205.pt'
 
-checkpoints = torch.load('Network_noFAC_LOLBlur.pt', map_location=device)
-# print(checkpoints)
-model.load_state_dict(checkpoints['model_state_dict'])
+model = DarkIR(img_channel=3, 
+                    width=32, 
+                    middle_blk_num_enc=2,
+                    middle_blk_num_dec=2, 
+                    enc_blk_nums=[1, 2, 3],
+                    dec_blk_nums=[3, 1, 1], 
+                    dilations=[1, 4, 9],
+                    extra_depth_wise=True)
+
+checkpoints = torch.load(PATH_MODEL, map_location=device)
+model.load_state_dict(checkpoints['params'])
 
 model = model.to(device)
 
-def load_img (filename):
-    img = Image.open(filename).convert("RGB")
-    img_tensor = pil_to_tensor(img)
-    return img_tensor
+def path_to_tensor(path):
+    img = Image.open(path).convert('RGB')
+    img = pil_to_tensor(img).unsqueeze(0)
+    
+    return img
+def normalize_tensor(tensor):
+    
+    max_value = torch.max(tensor)
+    min_value = torch.min(tensor)
+    output = (tensor - min_value)/(max_value)
+    return output
+
+def pad_tensor(tensor, multiple = 8):
+    '''pad the tensor to be multiple of some number'''
+    multiple = multiple
+    _, _, H, W = tensor.shape
+    pad_h = (multiple - H % multiple) % multiple
+    pad_w = (multiple - W % multiple) % multiple
+    tensor = F.pad(tensor, (0, pad_w, 0, pad_h), value = 0)
+    
+    return tensor
 
 def process_img(image):
-    img = np.array(image)
-    img = img / 255.
-    img = img.astype(np.float32)
-    y = torch.tensor(img).permute(2,0,1).unsqueeze(0).to(device)
+    tensor = path_to_tensor(image).to(device)
+    _, _, H, W = tensor.shape
+    
+    tensor = pad_tensor(tensor)
 
     with torch.no_grad():
-        x_hat = model(y)
+        output = model(tensor, side_loss=False)
 
-    restored_img = x_hat.squeeze().permute(1,2,0).clamp_(0, 1).cpu().detach().numpy()
-    restored_img = np.clip(restored_img, 0. , 1.)
+    output = torch.clamp(output, 0., 1.)
+    output = output[:,:, :H, :W].squeeze(0)    
+    return tensor_to_pil(output)
 
-    restored_img = (restored_img * 255.0).round().astype(np.uint8)  # float32 to uint8
-    return Image.fromarray(restored_img) #(image, Image.fromarray(restored_img))
-
-title = "Low-Light-Deblurring 🌚🌠🌝"
-description = ''' ## [Low Light Image deblurring enhancement](https://github.com/cidautai/Net-Low-light-Deblurring)
+title = "DarkIR ✏️🖼️ 🤗"
+description = ''' ## [ DarkIR: Robust Low-Light Image Restoration](https://github.com/cidautai/DarkIR)
 
 [Daniel Feijoo](https://github.com/danifei)
 
 Fundación Cidaut
 
-This model enhances low light images into normal light conditions ones. It was trained using LOLv2-real, LOLv2-synth and LOLBlur. 
-Due to the training on LOLBlur, this network is expected to also reconstruct blurred low light images. 
 
 > **Disclaimer:** please remember this is not a product, thus, you will notice some limitations.
-**This demo expects an image with some degradations.**
-Due to the CPU limitations, the model won't return results inmediately <br>.
-Except for the LOLv2-real, the model was trained using mostly synthetic data, thus it might not work great on real-world complex images. 
+**This demo expects an image with some Low-Light degradations.**
 
 <br>
 '''
 
-examples = [['examples/inputs/0010.png'],
-            ['examples/inputs/0060.png'], 
-            ['examples/inputs/0075.png'], 
-            ["examples/inputs/0087.png"], 
-            ["examples/inputs/0088.png"]]
+examples = [['examples/0010.png'],
+            ['examples/r13073518t_low.png'], 
+            ['examples/low00733_low.png'], 
+            ["examples/0087.png"]]
 
 css = """
     .image-frame img, .image-container img {

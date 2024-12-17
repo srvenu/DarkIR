@@ -1,118 +1,65 @@
 import torch
-import torch.nn as nn
-import torch.nn.init as init
-import torch.nn.functional as F
+import numpy as np
+from torch import nn as nn
+from torch.nn import init as init
+import torch.distributed as dist
+from collections import OrderedDict
 
-try:
-    from .nafnet_utils.arch_util import LayerNorm2d
-    from .nafnet_utils.arch_model import SimpleGate
-except:
-    from nafnet_utils.arch_util import LayerNorm2d
-    from nafnet_utils.arch_model import SimpleGate
+class LayerNormFunction(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, x, weight, bias, eps):
+        ctx.eps = eps
+        N, C, H, W = x.size()
+        mu = x.mean(1, keepdim=True)
+        var = (x - mu).pow(2).mean(1, keepdim=True)
+        y = (x - mu) / (var + eps).sqrt()
+        ctx.save_for_backward(y, var, weight)
+        y = weight.view(1, C, 1, 1) * y + bias.view(1, C, 1, 1)
+        return y
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        eps = ctx.eps
+
+        N, C, H, W = grad_output.size()
+        y, var, weight = ctx.saved_variables
+        g = grad_output * weight.view(1, C, 1, 1)
+        mean_g = g.mean(dim=1, keepdim=True)
+
+        mean_gy = (g * y).mean(dim=1, keepdim=True)
+        gx = 1. / torch.sqrt(var + eps) * (g - y * mean_gy - mean_g)
+        return gx, (grad_output * y).sum(dim=3).sum(dim=2).sum(dim=0), grad_output.sum(dim=3).sum(dim=2).sum(
+            dim=0), None
+
+class LayerNorm2d(nn.Module):
+
+    def __init__(self, channels, eps=1e-6):
+        super(LayerNorm2d, self).__init__()
+        self.register_parameter('weight', nn.Parameter(torch.ones(channels)))
+        self.register_parameter('bias', nn.Parameter(torch.zeros(channels)))
+        self.eps = eps
+
+    def forward(self, x):
+        return LayerNormFunction.apply(x, self.weight, self.bias, self.eps)
 
 
-class Branch(nn.Module):
+class CustomSequential(nn.Module):
     '''
-    Branch that lasts lonly the dilated convolutions
+    Similar to nn.Sequential, but it lets us introduce a second argument in the forward method 
+    so adaptors can be considered in the inference.
     '''
-    def __init__(self, c, DW_Expand, dilation = 1, extra_depth_wise = False):
-        super().__init__()
-        self.dw_channel = DW_Expand * c 
-        self.branch = nn.Sequential(
-                       nn.Conv2d(c, c, kernel_size=3, padding=1, stride=1, groups=c, bias=True, dilation=1) if extra_depth_wise else nn.Identity(), #optional extra dw
-                       nn.Conv2d(in_channels=c, out_channels=self.dw_channel, kernel_size=1, padding=0, stride=1, groups=1, bias=True, dilation = 1),
-                       nn.Conv2d(in_channels=self.dw_channel, out_channels=self.dw_channel, kernel_size=3, padding=dilation, stride=1, groups=self.dw_channel,
-                                            bias=True, dilation = dilation) # the dconv
-        )
-    def forward(self, input):
-        return self.branch(input)
-    
-class EBlock(nn.Module):
-    '''
-    Change this block using Branch
-    '''
-    
-    def __init__(self, c, DW_Expand=2, FFN_Expand=2, dilations = [1], extra_depth_wise = False):
-        super().__init__()
-        #we define the 2 branches
-        
-        self.branches = nn.ModuleList()
-        for dilation in dilations:
-            self.branches.append(Branch(c, DW_Expand, dilation = dilation, extra_depth_wise=extra_depth_wise))
-            
-        assert len(dilations) == len(self.branches)
-        self.dw_channel = DW_Expand * c 
-        self.sca = nn.Sequential(
-                       nn.AdaptiveAvgPool2d(1),
-                       nn.Conv2d(in_channels=self.dw_channel // 2, out_channels=self.dw_channel // 2, kernel_size=1, padding=0, stride=1,
-                       groups=1, bias=True, dilation = 1),  
-        )
-        self.sg1 = SimpleGate()
-        self.sg2 = SimpleGate()
-        self.conv3 = nn.Conv2d(in_channels=self.dw_channel // 2, out_channels=c, kernel_size=1, padding=0, stride=1, groups=1, bias=True, dilation = 1)
-        ffn_channel = FFN_Expand * c
-        self.conv4 = nn.Conv2d(in_channels=c, out_channels=ffn_channel, kernel_size=1, padding=0, stride=1, groups=1, bias=True)
-        self.conv5 = nn.Conv2d(in_channels=ffn_channel // 2, out_channels=c, kernel_size=1, padding=0, stride=1, groups=1, bias=True)
+    def __init__(self, *args):
+        super(CustomSequential, self).__init__()
+        self.modules_list = nn.ModuleList(args)
 
-        self.norm1 = LayerNorm2d(c)
-        self.norm2 = LayerNorm2d(c)
+    def forward(self, x, use_adapter=False):
+        for module in self.modules_list:
+            if hasattr(module, 'set_use_adapters'):
+                module.set_use_adapters(use_adapter)
+            x = module(x)
+        return x
 
-        self.gamma = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
-        self.beta = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
-
-    def forward(self, inp):
-
-        y = inp
-        x = self.norm1(inp)
-        z = 0
-        for branch in self.branches:
-            z += branch(x)
-        
-        z = self.sg1(z)
-        x = self.sca(z) * z
-        x = self.conv3(x)
-        y = inp + self.beta * x
-        #second step
-        x = self.conv4(self.norm2(y)) # size [B, 2*C, H, W]
-        x = self.sg2(x)  # size [B, C, H, W]
-        x = self.conv5(x) # size [B, C, H, W]
-
-        return y + x * self.gamma
-
-#----------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    img_channel = 3
-    width = 32
-
-    enc_blks = [1, 2, 3]
-    middle_blk_num = 3
-    dec_blks = [3, 1, 1]
-    dilations = [1, 4, 9]
-    extra_depth_wise = False
-    
-    # net = NAFNet(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
-    #                   enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
-    net  = EBlock(c = img_channel, 
-                            dilations = dilations,
-                            extra_depth_wise=extra_depth_wise)
-
-    inp_shape = (3, 256, 256)
-
-    from ptflops import get_model_complexity_info
-
-    # macs, params = get_model_complexity_info(net, inp_shape, verbose=False, print_per_layer_stat=True)
-
-    # print('Values of EBlock:')
-    # print(macs, params)
-
-    channels = 128
-    resol = 32
-    ksize = 5
-
-    net = FAC(channels=channels, ksize=ksize)
-    inp_shape = (channels, resol, resol)
-    macs, params = get_model_complexity_info(net, inp_shape, verbose=False, print_per_layer_stat=True)
-    print('Values of FAC:')
-    print(macs, params)
-
+    pass
