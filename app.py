@@ -70,7 +70,8 @@ Fundación Cidaut
 '''
 
 examples = [['examples/0010.png'],
-            ['examples/r13073518t_low.png'], 
+            ['examples/1001.png'],
+            ['examples/1100.png'], 
             ['examples/low00733_low.png'], 
             ["examples/0087.png"]]
 
