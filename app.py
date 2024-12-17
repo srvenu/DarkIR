@@ -31,17 +31,6 @@ model.load_state_dict(checkpoints['params'])
 
 model = model.to(device)
 
-def path_to_tensor(path):
-    img = Image.open(path).convert('RGB')
-    img = pil_to_tensor(img).unsqueeze(0)
-    
-    return img
-def normalize_tensor(tensor):
-    
-    max_value = torch.max(tensor)
-    min_value = torch.min(tensor)
-    output = (tensor - min_value)/(max_value)
-    return output
 
 def pad_tensor(tensor, multiple = 8):
     '''pad the tensor to be multiple of some number'''
@@ -54,7 +43,7 @@ def pad_tensor(tensor, multiple = 8):
     return tensor
 
 def process_img(image):
-    tensor = path_to_tensor(image).to(device)
+    tensor = pil_to_tensor(image).unsqueeze(0).to(device)
     _, _, H, W = tensor.shape
     
     tensor = pad_tensor(tensor)
