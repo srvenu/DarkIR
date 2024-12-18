@@ -58,10 +58,13 @@ def process_img(image):
 title = "DarkIR ✏️🖼️ 🤗"
 description = ''' ## [ DarkIR: Robust Low-Light Image Restoration](https://github.com/cidautai/DarkIR)
 
-[Daniel Feijoo](https://github.com/danifei)
+[Daniel Feijoo](https://github.com/danifei), Juan C. Benito, Álvaro García, Marcos V. Conde
 
-Fundación Cidaut
+[Fundación Cidaut](https://cidaut.ai/)
 
+>**Abstract**:Photography during night or in dark conditions typically suffers from noise, low light and blurring issues due to the dim environment and the common use of long exposure. Although Deblurring and Low-light Image Enhancement (LLIE) are related under these conditions, most approaches in image restoration solve these tasks separately. In this paper, we present an efficient and robust neural network for multi-task low-light image restoration. Instead of following the current tendency of Transformer-based models, we propose new attention mechanisms to enhance the receptive field of efficient CNNs. Our method reduces the computational costs in terms of parameters and MAC operations compared to previous methods. Our model, DarkIR, achieves new state-of-the-art results on the popular LOLBlur, LOLv2 and Real-LOLBlur datasets, being able to generalize on real-world night and dark images.
+
+Available code at [github](https://github.com/cidautai/DarkIR). More information on the [Arxiv paper](). 
 
 > **Disclaimer:** please remember this is not a product, thus, you will notice some limitations.
 **This demo expects an image with some Low-Light degradations.**
